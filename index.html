@@ -87,7 +87,14 @@ body {
 .upload-status {
   font-size: 14px; color: #2a6a9e; margin-top: 8px; font-weight: 500;
 }
-#fileInput { display: none; }
+#fileInput {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
 
 /* ===== Step 2: 列映射 ===== */
 .mapping-card {
@@ -428,58 +435,89 @@ uploadArea.addEventListener('drop', e => {
   if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
 });
 fileInput.addEventListener('change', function() {
-  setStatus('文件已选择，正在处理...');
-  if (this.files && this.files.length) {
-    handleFile(this.files[0]);
-  } else {
-    setStatus('未选择到文件，请重试');
+  try {
+    showToast('文件已选择');
+    document.querySelector('.upload-area .main-text').textContent = '📖 正在处理...';
+    document.querySelector('.upload-area .sub-text').textContent = '请稍候';
+    if (this.files && this.files.length) {
+      handleFile(this.files[0]);
+    } else {
+      document.querySelector('.upload-area .main-text').textContent = '点击选择 Excel 文件';
+      document.querySelector('.upload-area .sub-text').textContent = '未选择到文件，请重试';
+      showToast('未选择到文件');
+    }
+  } catch(e) {
+    showToast('出错：' + e.message);
   }
 });
 
-function setStatus(msg) {
-  var el = document.getElementById('uploadStatus');
-  if (el) el.textContent = msg;
-}
-
 function handleFile(file) {
   if (!file.name.match(/\.xlsx?$/i)) {
-    setStatus('⚠️ 请选择 .xlsx 或 .xls 格式');
+    document.querySelector('.upload-area .sub-text').textContent = '⚠️ 请选择 .xlsx 或 .xls 格式';
+    showToast('格式不对，需要 .xlsx 或 .xls');
     return;
   }
   document.getElementById('fileName').textContent = '📎 ' + file.name;
-  setStatus('📖 正在读取文件...');
 
+  try {
+    // 先检查 XLSX 是否已加载
+    if (typeof XLSX === 'undefined') {
+      document.querySelector('.upload-area .sub-text').textContent = '⏳ 正在加载解析库...';
+      // 尝试动态加载
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+      s.onload = function() { readFile(file); };
+      s.onerror = function() {
+        document.querySelector('.upload-area .main-text').textContent = '❌ 库加载失败';
+        document.querySelector('.upload-area .sub-text').textContent = '请检查网络后刷新页面重试';
+      };
+      document.head.appendChild(s);
+      return;
+    }
+    readFile(file);
+  } catch(e) {
+    showToast('初始化失败：' + e.message);
+    resetUpload();
+  }
+}
+
+function readFile(file) {
+  document.querySelector('.upload-area .sub-text').textContent = '📖 正在读取文件...';
   try {
     var reader = new FileReader();
     reader.onload = function(e) {
-      setStatus('⏳ 正在解析 Excel...');
+      document.querySelector('.upload-area .sub-text').textContent = '⏳ 正在解析 Excel...';
       try {
-        if (typeof XLSX === 'undefined') {
-          setStatus('❌ Excel 解析库未加载，请检查网络后刷新');
-          return;
-        }
-        // 用 binary 方式兼容移动端
         var data = e.target.result;
         rawWorkbook = XLSX.read(data, { type: 'binary', codepage: 65001 });
         sheetNames = rawWorkbook.SheetNames;
         if (!sheetNames || !sheetNames.length) {
-          setStatus('❌ 未找到工作表');
+          document.querySelector('.upload-area .sub-text').textContent = '❌ 未找到工作表';
           return;
         }
         activeSheet = sheetNames[0];
-        setStatus('✅ 解析成功，跳转配置...');
+        document.querySelector('.upload-area .sub-text').textContent = '✅ 跳转配置页面...';
         loadSheet(activeSheet);
       } catch (err) {
-        setStatus('❌ 解析失败：' + err.message);
+        document.querySelector('.upload-area .sub-text').textContent = '❌ 解析失败：' + err.message;
+        showToast('解析失败：' + err.message);
       }
     };
     reader.onerror = function() {
-      setStatus('❌ 文件读取失败，请重试');
+      document.querySelector('.upload-area .sub-text').textContent = '❌ 文件读取失败';
+      showToast('文件读取失败');
     };
     reader.readAsBinaryString(file);
-  } catch (err) {
-    setStatus('❌ 读取异常：' + err.message);
+  } catch(e) {
+    showToast('读取异常：' + e.message);
+    resetUpload();
   }
+}
+
+function resetUpload() {
+  document.querySelector('.upload-area .main-text').textContent = '点击选择 Excel 文件';
+  document.querySelector('.upload-area .sub-text').textContent = '电脑端也可拖拽 .xlsx / .xls 文件到此处';
+  document.getElementById('fileName').textContent = '';
 }
 
 // ============================================================
