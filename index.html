@@ -456,6 +456,25 @@ fileInput.addEventListener('change', function() {
   }
 });
 
+// 兜底：某些浏览器 change 不触发，用轮询检测
+var pollTimer = null;
+fileInput.addEventListener('click', function() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(function() {
+    if (fileInput.files && fileInput.files.length) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      document.querySelector('.upload-area .main-text').textContent = '📖 正在处理...';
+      document.querySelector('.upload-area .sub-text').textContent = '请稍候';
+      handleFile(fileInput.files[0]);
+    }
+  }, 300);
+  // 10秒后自动停止（用户取消了选择）
+  setTimeout(function() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }, 10000);
+});
+
 function handleFile(file) {
   if (!file.name.match(/\.xlsx?$/i)) {
     document.querySelector('.upload-area .sub-text').textContent = '⚠️ 请选择 .xlsx 或 .xls 格式';
