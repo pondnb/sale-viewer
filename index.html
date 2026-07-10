@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Excel → 手机网页 转换工具</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f0f2f5;
+  color: #222;
+  min-height: 100vh;
+}
+
+/* ===== 顶部导航 ===== */
+.app-header {
+  background: linear-gradient(135deg, #1a3a5c, #2a6a9e);
+  color: #fff;
+  padding: 20px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 2px 12px rgba(0,0,0,.15);
+}
+.app-header h1 { font-size: 20px; font-weight: 600; }
+.app-header .sub { font-size: 13px; opacity: .75; margin-top: 4px; }
+
+/* ===== 步骤条 ===== */
+.steps {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  padding: 14px 16px;
+  background: #fff;
+  margin: 12px;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+.step-dot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.step-dot .circle {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  background: #e0e0e0; color: #999;
+  transition: all .3s;
+}
+.step-dot .circle.active { background: #1a3a5c; color: #fff; }
+.step-dot .circle.done { background: #27ae60; color: #fff; }
+.step-dot .label { font-size: 12px; color: #999; }
+.step-dot .label.active { color: #1a3a5c; font-weight: 600; }
+.step-dot .label.done { color: #27ae60; }
+.step-line {
+  width: 40px; height: 2px;
+  background: #e0e0e0; margin: 0 8px;
+  align-self: center;
+}
+.step-line.done { background: #27ae60; }
+
+/* ===== 内容容器 ===== */
+.step-panel { display: none; padding: 0 12px 24px; }
+.step-panel.active { display: block; }
+
+/* ===== Step 1: 上传 ===== */
+.upload-area {
+  background: #fff;
+  border: 2.5px dashed #ccc;
+  border-radius: 16px;
+  padding: 50px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .25s;
+  margin-bottom: 16px;
+}
+.upload-area:hover, .upload-area.dragover { border-color: #2a6a9e; background: #f0f6ff; }
+.upload-area .icon { font-size: 48px; margin-bottom: 10px; }
+.upload-area .main-text { font-size: 18px; font-weight: 500; color: #333; }
+.upload-area .sub-text { font-size: 14px; color: #999; margin-top: 6px; }
+.upload-area .file-name { font-size: 15px; color: #27ae60; margin-top: 10px; font-weight: 500; }
+#fileInput { display: none; }
+
+/* ===== Step 2: 列映射 ===== */
+.mapping-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.06);
+}
+.mapping-card h3 { font-size: 16px; margin-bottom: 12px; color: #1a3a5c; }
+.mapping-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.mapping-row:last-child { border-bottom: none; }
+.mapping-row .field-label {
+  width: 110px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  flex-shrink: 0;
+}
+.mapping-row .field-label .required { color: #e74c3c; }
+.mapping-row select {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fff;
+  appearance: auto;
+}
+.mapping-row select:focus { border-color: #2a6a9e; outline: none; }
+.mapping-row .auto-badge {
+  font-size: 11px;
+  background: #e8f5e9;
+  color: #27ae60;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.data-preview {
+  background: #fff;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.06);
+  overflow-x: auto;
+}
+.data-preview h3 { font-size: 16px; margin-bottom: 10px; color: #1a3a5c; }
+.data-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.data-preview td, .data-preview th {
+  border: 1px solid #e8e8e8;
+  padding: 6px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+.data-preview th { background: #f5f7fa; font-weight: 500; color: #555; }
+.data-preview tr:nth-child(even) td { background: #fafbfc; }
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.btn {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-primary { background: #1a3a5c; color: #fff; }
+.btn-primary:hover { background: #234a72; }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-secondary { background: #e8e8e8; color: #555; }
+.btn-secondary:hover { background: #ddd; }
+.btn-success { background: #27ae60; color: #fff; }
+.btn-success:hover { background: #219a52; }
+
+/* ===== 输出配置 ===== */
+.config-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 6px rgba(0,0,0,.06);
+}
+.config-card h3 { font-size: 16px; margin-bottom: 12px; color: #1a3a5c; }
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.config-row label { font-size: 14px; color: #555; min-width: 70px; }
+.config-row input, .config-row select {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.config-row input:focus, .config-row select:focus { border-color: #2a6a9e; outline: none; }
+.config-row .hint { font-size: 12px; color: #999; }
+
+/* ===== Step 3: 结果 ===== */
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.result-header h2 { font-size: 18px; color: #1a3a5c; }
+.result-actions { display: flex; gap: 8px; }
+.result-actions .btn { flex: none; padding: 10px 18px; font-size: 14px; }
+
+/* 输出预览 — 复用卡片样式 */
+.preview-wrapper {
+  background: #eef1f5;
+  border-radius: 14px;
+  padding: 10px;
+  min-height: 200px;
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+}
+
+/* ===== Toast ===== */
+.toast {
+  position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,.8); color: #fff; padding: 12px 24px;
+  border-radius: 10px; font-size: 14px; z-index: 100;
+  opacity: 0; transition: opacity .3s; pointer-events: none;
+}
+.toast.show { opacity: 1; }
+
+/* ===== 响应式 ===== */
+@media (min-width: 600px) {
+  body { max-width: 480px; margin: 0 auto; background: #e0e0e0; }
+  .app-header { border-radius: 0 0 14px 14px; }
+}
+
+/* 空状态 */
+.empty-state { text-align: center; padding: 40px 20px; color: #999; }
+.empty-state .icon { font-size: 40px; margin-bottom: 10px; }
+
+/* loading */
+.spinner {
+  display: inline-block; width: 20px; height: 20px;
+  border: 2.5px solid rgba(255,255,255,.3); border-top-color: #fff;
+  border-radius: 50%; animation: spin .6s linear infinite;
+  vertical-align: middle; margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>📄 Excel → 手机网页</h1>
+  <div class="sub">上传销售报表，自动生成移动端浏览页</div>
+</div>
+
+<!-- 步骤条 -->
+<div class="steps">
+  <div class="step-dot">
+    <div class="circle active" id="s1c">1</div>
+    <span class="label active" id="s1l">上传</span>
+  </div>
+  <div class="step-line" id="line1"></div>
+  <div class="step-dot">
+    <div class="circle" id="s2c">2</div>
+    <span class="label" id="s2l">配置</span>
+  </div>
+  <div class="step-line" id="line2"></div>
+  <div class="step-dot">
+    <div class="circle" id="s3c">3</div>
+    <span class="label" id="s3l">生成</span>
+  </div>
+</div>
+
+<!-- ========== Step 1: 上传 ========== -->
+<div class="step-panel active" id="step1">
+  <div class="upload-area" id="uploadArea">
+    <div class="icon">📂</div>
+    <div class="main-text">点击选择 Excel 文件</div>
+    <div class="sub-text">或拖拽 .xlsx / .xls 文件到此处</div>
+    <div class="file-name" id="fileName"></div>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls">
+
+  <div style="background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.06)">
+    <h3 style="font-size:15px;color:#1a3a5c;margin-bottom:8px">📌 使用说明</h3>
+    <ul style="font-size:13px;color:#666;line-height:1.8;padding-left:18px">
+      <li>上传销售类的 Excel 报表（.xlsx / .xls）</li>
+      <li>工具会自动识别关键列：<b>品名规格、支数、重量、单价、金额</b></li>
+      <li>识别结果可在下一步手动调整</li>
+      <li>所有数据仅在本地浏览器处理，不会上传到任何服务器</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ========== Step 2: 配置 ========== -->
+<div class="step-panel" id="step2">
+  <div class="data-preview" id="previewTable">
+    <h3>📋 数据预览</h3>
+    <div id="tableWrap"></div>
+  </div>
+
+  <div class="mapping-card">
+    <h3>🔗 列映射</h3>
+    <p style="font-size:13px;color:#888;margin-bottom:10px">请确认或调整各字段对应的列（<span style="color:#e74c3c">*</span> 为必填）</p>
+    <div id="mappingRows"></div>
+  </div>
+
+  <div class="config-card">
+    <h3>⚙️ 输出设置</h3>
+    <div class="config-row">
+      <label>标题</label>
+      <input type="text" id="outputTitle" value="销售明细表" placeholder="页面标题">
+    </div>
+    <div class="config-row">
+      <label>副标题</label>
+      <input type="text" id="outputSubtitle" placeholder="可选，如公司名称">
+    </div>
+    <div class="config-row">
+      <label>重量单位</label>
+      <input type="text" id="weightUnit" value="KG" style="flex:none;width:80px">
+      <span class="hint">显示在重量后面</span>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="goStep(1)">← 返回</button>
+    <button class="btn btn-primary" id="generateBtn" onclick="generate()">🚀 生成网页</button>
+  </div>
+</div>
+
+<!-- ========== Step 3: 结果 ========== -->
+<div class="step-panel" id="step3">
+  <div class="result-header">
+    <h2>✅ 生成完成</h2>
+    <div class="result-actions">
+      <button class="btn btn-success" onclick="downloadHTML()">📥 下载</button>
+    </div>
+  </div>
+  <div class="preview-wrapper" id="previewArea">
+    <div class="empty-state">
+      <div class="icon">🔄</div>
+      <div>正在生成预览…</div>
+    </div>
+  </div>
+  <div class="btn-row" style="margin-top:12px">
+    <button class="btn btn-secondary" onclick="goStep(2)">← 修改配置</button>
+    <button class="btn btn-primary" onclick="downloadHTML()">📥 下载 HTML 文件</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  全局状态
+// ============================================================
+let rawWorkbook = null;
+let sheetNames = [];
+let activeSheet = '';
+let allData = [];       // 原始二维数组
+let headers = [];       // 表头行
+let dataRows = [];      // 数据行（不含表头）
+let colCount = 0;
+
+// 必选字段定义
+const REQUIRED_FIELDS = [
+  { key: 'spec',    label: '品名规格',  hint: '产品名称/规格',  matchers: ['品名','规格','品种','名称','品','纱','产品'] },
+  { key: 'count',   label: '支数',     hint: '如 32支、21支',  matchers: ['支数','支','纱支'] },
+  { key: 'weight',  label: '出库重量', hint: '重量数值',       matchers: ['重量','出库','KG','kg','公斤','重'] },
+  { key: 'price',   label: '单价',     hint: '单价金额',       matchers: ['单价','价格','单价','价'] },
+  { key: 'amount',  label: '销售金额', hint: '销售总额',       matchers: ['金额','销售金额','总额','总价','合计','总金额'] },
+];
+
+const OPTIONAL_FIELDS = [
+  { key: 'date',    label: '日期',     matchers: ['日期','日','date','时间'] },
+  { key: 'orderNo', label: '业务单号', matchers: ['单号','编号','订单','业务','单'] },
+];
+
+let autoMap = {};       // { fieldKey: columnIndex }
+let userMap = {};       // 用户修改后的映射
+
+// ============================================================
+//  步骤切换
+// ============================================================
+function goStep(n) {
+  for (let i = 1; i <= 3; i++) {
+    document.getElementById('step' + i).classList.toggle('active', i === n);
+    const c = document.getElementById('s' + i + 'c');
+    const l = document.getElementById('s' + i + 'l');
+    c.classList.toggle('active', i === n);
+    l.classList.toggle('active', i === n);
+    if (i < n) {
+      c.classList.add('done'); l.classList.add('done');
+      document.getElementById('line' + i).classList.add('done');
+    } else {
+      c.classList.remove('done'); l.classList.remove('done');
+      document.getElementById('line' + i).classList.remove('done');
+    }
+  }
+  window.scrollTo(0, 0);
+}
+
+// ============================================================
+//  文件上传
+// ============================================================
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+uploadArea.addEventListener('dragover', e => {
+  e.preventDefault();
+  uploadArea.classList.add('dragover');
+});
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
+function handleFile(file) {
+  if (!file.name.match(/\.xlsx?$/i)) {
+    showToast('请选择 .xlsx 或 .xls 文件');
+    return;
+  }
+  document.getElementById('fileName').textContent = '📎 ' + file.name;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      rawWorkbook = XLSX.read(data, { type: 'array', codepage: 65001 });
+      sheetNames = rawWorkbook.SheetNames;
+      activeSheet = sheetNames[0];
+      loadSheet(activeSheet);
+    } catch (err) {
+      showToast('文件读取失败：' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
+//  读取 Sheet
+// ============================================================
+function loadSheet(sheetName) {
+  const sheet = rawWorkbook.Sheets[sheetName];
+  const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  if (!json || json.length < 2) {
+    showToast('表格内容不足，至少需要表头+数据行');
+    return;
+  }
+
+  allData = json;
+  colCount = 0;
+  for (let row of json) {
+    if (row.length > colCount) colCount = row.length;
+  }
+
+  // 自动定位表头行：扫描每行，看谁匹配的关键字段最多
+  let bestRow = -1, bestScore = 0;
+  for (let i = 0; i < Math.min(10, json.length); i++) {
+    let score = 0;
+    for (let cell of json[i]) {
+      const s = String(cell).trim();
+      for (let f of [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]) {
+        if (f.matchers.some(m => s.includes(m))) { score++; break; }
+      }
+    }
+    if (score > bestScore) { bestScore = score; bestRow = i; }
+  }
+
+  if (bestRow < 0) { showToast('未能识别表头行，请确认文件格式'); return; }
+
+  headers = json[bestRow].map(h => String(h).trim());
+  dataRows = json.slice(bestRow + 1).filter(row => {
+    // 过滤空行和汇总行
+    const vals = row.filter(c => String(c).trim() !== '');
+    if (vals.length === 0) return false;
+    const allText = row.map(c => String(c).trim()).join('');
+    if (/合计|总计|小计|汇总/i.test(allText)) return false;
+    return true;
+  });
+
+  // 自动检测列映射
+  autoDetectColumns();
+  renderPreviewTable();
+  renderMappingUI();
+  goStep(2);
+}
+
+// ============================================================
+//  自动检测列映射
+// ============================================================
+function autoDetectColumns() {
+  autoMap = {};
+  userMap = {};
+
+  for (let f of [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS]) {
+    let bestCol = -1, bestScore = 0;
+    for (let j = 0; j < headers.length; j++) {
+      const h = headers[j];
+      let score = 0;
+      for (let m of f.matchers) {
+        if (h.includes(m)) { score += 10 - Math.abs(h.length - m.length); break; }
+      }
+      if (f.matchers.some(m => h.includes(m))) {
+        // bonus: 更精确匹配权重更高
+        const matched = f.matchers.filter(m => h.includes(m));
+        score += matched.length * 2;
+      }
+      if (score > bestScore) { bestScore = score; bestCol = j; }
+    }
+    if (bestCol >= 0) {
+      autoMap[f.key] = bestCol;
+      userMap[f.key] = bestCol;
+    }
+  }
+}
+
+// ============================================================
+//  渲染数据预览
+// ============================================================
+function renderPreviewTable() {
+  const wrap = document.getElementById('tableWrap');
+  let html = '<table><thead><tr>';
+  for (let h of headers) html += '<th>' + esc(h) + '</th>';
+  html += '</tr></thead><tbody>';
+
+  const previewRows = Math.min(5, dataRows.length);
+  for (let i = 0; i < previewRows; i++) {
+    html += '<tr>';
+    for (let j = 0; j < headers.length; j++) {
+      html += '<td>' + esc(String(dataRows[i][j] ?? '')) + '</td>';
+    }
+    html += '</tr>';
+  }
+  if (dataRows.length > 5) {
+    html += '<tr><td colspan="' + headers.length + '" style="text-align:center;color:#999">… 共 ' + dataRows.length + ' 行数据</td></tr>';
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ============================================================
+//  渲染列映射 UI
+// ============================================================
+function renderMappingUI() {
+  const container = document.getElementById('mappingRows');
+  let html = '';
+
+  for (let f of REQUIRED_FIELDS) {
+    html += buildMappingRow(f, true);
+  }
+  for (let f of OPTIONAL_FIELDS) {
+    html += buildMappingRow(f, false);
+  }
+
+  container.innerHTML = html;
+
+  // 绑定 change 事件
+  document.querySelectorAll('.col-select').forEach(sel => {
+    sel.addEventListener('change', function() {
+      userMap[this.dataset.key] = parseInt(this.value);
+      // 标记自动/手动
+      const badge = this.closest('.mapping-row').querySelector('.auto-badge');
+      if (badge) {
+        badge.textContent = this.value === '-1' ? '未设置' : (autoMap[this.dataset.key] === parseInt(this.value) ? '✓ 自动' : '✎ 手动');
+        badge.style.background = this.value === '-1' ? '#fef0f0' : (autoMap[this.dataset.key] === parseInt(this.value) ? '#e8f5e9' : '#fff8e1');
+        badge.style.color = this.value === '-1' ? '#e74c3c' : (autoMap[this.dataset.key] === parseInt(this.value) ? '#27ae60' : '#f39c12');
+      }
+    });
+  });
+}
+
+function buildMappingRow(field, required) {
+  const val = userMap[field.key] ?? -1;
+  const isAuto = autoMap[field.key] !== undefined && autoMap[field.key] === val;
+
+  let options = '<option value="-1">— 不选择 —</option>';
+  for (let j = 0; j < headers.length; j++) {
+    const selected = (j === val) ? 'selected' : '';
+    const marker = (autoMap[field.key] === j) ? ' ★' : '';
+    options += `<option value="${j}" ${selected}>${esc(headers[j])}${marker}</option>`;
+  }
+
+  let badgeHtml = '';
+  if (val >= 0) {
+    badgeHtml = `<span class="auto-badge" style="background:${isAuto ? '#e8f5e9' : '#fff8e1'};color:${isAuto ? '#27ae60' : '#f39c12'}">${isAuto ? '✓ 自动' : '✎ 手动'}</span>`;
+  } else if (required) {
+    badgeHtml = `<span class="auto-badge" style="background:#fef0f0;color:#e74c3c">未设置</span>`;
+  }
+
+  return `
+    <div class="mapping-row">
+      <span class="field-label">${required ? '<span class="required">*</span> ' : ''}${field.label}</span>
+      <select class="col-select" data-key="${field.key}">${options}</select>
+      ${badgeHtml}
+    </div>
+  `;
+}
+
+// ============================================================
+//  生成 HTML
+// ============================================================
+function generate() {
+  // 验证必填字段
+  for (let f of REQUIRED_FIELDS) {
+    if ((userMap[f.key] ?? -1) < 0) {
+      showToast('请设置必填字段：' + f.label);
+      return;
+    }
+  }
+
+  const btn = document.getElementById('generateBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 生成中…';
+
+  // 小延迟让 UI 更新
+  setTimeout(() => {
+    try {
+      const html = buildOutputHTML();
+      document.getElementById('previewArea').innerHTML = html;
+      generatedHTML = buildFullPageHTML(html);
+      goStep(3);
+    } catch (err) {
+      showToast('生成失败：' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🚀 生成网页';
+    }
+  }, 100);
+}
+
+let generatedHTML = '';
+
+// ============================================================
+//  构建输出页面
+// ============================================================
+function buildOutputHTML() {
+  const title = document.getElementById('outputTitle').value || '销售明细表';
+  const subtitle = document.getElementById('outputSubtitle').value || '';
+  const weightUnit = document.getElementById('weightUnit').value || 'KG';
+
+  // 提取数据
+  const rows = [];
+  for (let row of dataRows) {
+    const spec    = String(row[userMap.spec] ?? '').trim();
+    const count   = String(row[userMap.count] ?? '').trim();
+    const weight  = parseFloat(row[userMap.weight]) || 0;
+    const price   = parseFloat(row[userMap.price]) || 0;
+    const amount  = parseFloat(row[userMap.amount]) || 0;
+    const colDate = userMap.date;
+    const colOrder = userMap.orderNo;
+    const date    = (colDate != null && colDate >= 0) ? String(row[colDate] ?? '').trim() : '';
+    const orderNo = (colOrder != null && colOrder >= 0) ? String(row[colOrder] ?? '').trim() : '';
+
+    if (!spec) continue; // 跳过无品名的行
+
+    rows.push({ spec, count, weight, price, amount, date, orderNo });
+  }
+
+  if (rows.length === 0) {
+    return '<div class="empty-state"><div class="icon">😕</div><div>没有找到有效数据，请检查列映射</div></div>';
+  }
+
+  // 预览只显示原始顺序的简单统计
+  let totalW = 0, totalA = 0;
+  for (let r of rows) { totalW += r.weight; totalA += r.amount; }
+
+  let previewCards = '';
+  const showCount = Math.min(8, rows.length);
+  for (let i = 0; i < showCount; i++) {
+    const r = rows[i];
+    previewCards += `
+      <tr${i%2===1?' style="background:#f8f9fb"':''}>
+        <td style="text-align:left;font-weight:500;color:#1a3a5c;padding:6px 8px">${esc(r.spec)}</td>
+        <td style="color:#e67e22;font-weight:500;padding:6px 8px">${esc(r.count)}</td>
+        <td style="font-weight:500;padding:6px 8px">${r.weight.toFixed(1)}</td>
+        <td style="color:#d35400;font-weight:500;padding:6px 8px">¥${r.price.toFixed(2)}</td>
+        <td style="color:#c0392b;font-weight:700;padding:6px 8px">¥${r.amount.toFixed(2)}</td>
+      </tr>`;
+  }
+
+  return `
+    <div style="background:#1a3a5c;color:#fff;border-radius:12px;padding:12px 14px;margin-bottom:8px">
+      <div style="font-size:17px;font-weight:600">${esc(title)}</div>
+      ${subtitle ? `<div style="font-size:13px;opacity:.75">${esc(subtitle)}</div>` : ''}
+      <div style="font-size:12px;opacity:.6;margin-top:4px">${rows.length} 条 · 总金额 ¥${totalA.toFixed(2)}</div>
+    </div>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:14px;min-width:480px;table-layout:fixed">
+      <thead>
+        <tr style="background:#1a3a5c;color:#fff">
+          <th style="width:30%;padding:8px 6px;font-size:14px;font-weight:600;text-align:center">品名规格</th>
+          <th style="width:12%;padding:8px 6px;font-size:14px;font-weight:600;text-align:center">支数</th>
+          <th style="width:17%;padding:8px 6px;font-size:14px;font-weight:600;text-align:center">重量/${weightUnit}</th>
+          <th style="width:17%;padding:8px 6px;font-size:14px;font-weight:600;text-align:center">单价</th>
+          <th style="width:24%;padding:8px 6px;font-size:14px;font-weight:600;text-align:center">销售金额</th>
+        </tr>
+      </thead>
+      <tbody style="background:#fff">
+        ${previewCards}
+        ${rows.length > showCount ? `<tr><td colspan="5" style="text-align:center;color:#999;padding:10px;font-size:13px">… 共 ${rows.length} 条，下载完整版可用排序</td></tr>` : ''}
+      </tbody>
+    </table>
+    </div>
+    <div style="background:#1a3a5c;color:#fff;border-radius:12px;padding:10px 14px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:14px">销售总金额</span>
+      <span style="font-size:20px;font-weight:700;color:#f1c40f">¥${totalA.toFixed(2)}</span>
+    </div>`;
+
+// ============================================================
+//  构建完整 HTML 页面（带排序 + 悬浮底栏）
+// ============================================================
+function buildFullPageHTML(bodyContent) {
+  const title = document.getElementById('outputTitle').value || '销售明细表';
+  const subtitle = document.getElementById('outputSubtitle').value || '';
+  const weightUnit = document.getElementById('weightUnit').value || 'KG';
+
+  // 提取数据作为 JSON 嵌入
+  const rows = [];
+  for (let row of dataRows) {
+    const spec    = String(row[userMap.spec] ?? '').trim();
+    const count   = String(row[userMap.count] ?? '').trim();
+    const weight  = parseFloat(row[userMap.weight]) || 0;
+    const price   = parseFloat(row[userMap.price]) || 0;
+    const amount  = parseFloat(row[userMap.amount]) || 0;
+    const colDate = userMap.date;
+    const colOrder = userMap.orderNo;
+    const date    = (colDate != null && colDate >= 0) ? String(row[colDate] ?? '').trim() : '';
+    const orderNo = (colOrder != null && colOrder >= 0) ? String(row[colOrder] ?? '').trim() : '';
+    if (!spec) continue;
+    rows.push({ spec, count, weight, price, amount, date, orderNo });
+  }
+
+  const dataJson = JSON.stringify(rows);
+  const unitJson = JSON.stringify(weightUnit);
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>${esc(title)}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#eef1f5;color:#222;display:flex;flex-direction:column}
+
+/* 头部 */
+header{background:#1a3a5c;color:#fff;padding:10px 14px;flex-shrink:0}
+header h1{font-size:18px;font-weight:600}
+header .sub{font-size:13px;opacity:.75}
+
+/* 排序栏 - 紧凑横排 */
+.sort-row{display:flex;gap:4px;padding:6px 10px;background:#fff;border-bottom:1px solid #e0e0e0;flex-shrink:0;overflow-x:auto}
+.sort-row::-webkit-scrollbar{height:0}
+.sort-row button{flex-shrink:0;padding:5px 12px;border-radius:14px;border:1.5px solid #d0d0d0;background:#fff;font-size:13px;cursor:pointer;color:#555;font-weight:500}
+.sort-row button.on{border-color:#1a3a5c;background:#1a3a5c;color:#fff}
+
+/* ===== 表格区域 ===== */
+.table-wrap{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead{position:sticky;top:0;z-index:5}
+thead th{background:#1a3a5c;color:#fff;font-size:15px;font-weight:600;padding:10px 6px;text-align:center;border-right:1px solid rgba(255,255,255,.1);letter-spacing:.5px}
+thead th:last-child{border-right:none}
+
+/* 五列宽度比例：品名规格最宽，支数最窄 */
+thead th:nth-child(1){width:30%}  /* 品名规格 */
+thead th:nth-child(2){width:12%}  /* 支数 */
+thead th:nth-child(3){width:17%}  /* 重量 */
+thead th:nth-child(4){width:17%}  /* 单价 */
+thead th:nth-child(5){width:24%}  /* 销售金额 */
+
+tbody td{padding:9px 6px;text-align:center;font-size:16px;border-bottom:1px solid #e8e8e8;background:#fff;vertical-align:middle}
+tbody tr:nth-child(even) td{background:#f8f9fb}
+tbody tr:active td{background:#e8f0fe}
+
+/* 各列对齐 */
+td:nth-child(1){text-align:left;font-weight:500;color:#1a3a5c;padding-left:10px;word-break:break-all}
+td:nth-child(2){color:#e67e22;font-weight:500}
+td:nth-child(3){font-weight:500}
+td:nth-child(4){color:#d35400;font-weight:500}
+td:nth-child(5){color:#c0392b;font-weight:700;font-size:17px}
+
+/* 底部悬浮合计栏 */
+footer{position:sticky;bottom:0;flex-shrink:0;background:#1a3a5c;color:#fff;padding:8px 14px 10px;box-shadow:0 -2px 8px rgba(0,0,0,.15)}
+footer .row{display:flex;justify-content:space-between;font-size:13px;opacity:.8;padding:1px 0}
+footer .total{display:flex;justify-content:space-between;padding-top:4px;margin-top:2px;border-top:1px solid rgba(255,255,255,.2)}
+footer .total .lb{font-size:14px}
+footer .total .vl{font-size:20px;font-weight:700;color:#f1c40f}
+
+/* 空状态 */
+.empty{text-align:center;padding:40px;color:#999;font-size:15px}
+
+/* 竖屏提示旋转 */
+.rotate-hint{display:none;position:fixed;inset:0;background:#1a3a5c;color:#fff;z-index:999;flex-direction:column;align-items:center;justify-content:center;padding:30px}
+.rotate-hint .icon{font-size:56px;margin-bottom:16px;animation:rotate-phone 2s ease-in-out infinite}
+@keyframes rotate-phone{0%,100%{transform:rotate(0deg)}50%{transform:rotate(90deg)}}
+.rotate-hint .text{font-size:20px;font-weight:500;text-align:center}
+.rotate-hint .sub{font-size:14px;opacity:.6;margin-top:8px}
+@media (orientation:portrait){
+  .rotate-hint{display:flex}
+  body>*,body>.table-wrap,body>header,body>footer,body>.sort-row{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="rotate-hint" id="rotateHint">
+  <div class="icon">📱</div>
+  <div class="text">请横屏使用</div>
+  <div class="sub">旋转手机以表格查看数据</div>
+</div>
+
+<header>
+  <h1>${esc(title)}</h1>
+  ${subtitle ? `<div class="sub">${esc(subtitle)}</div>` : ''}
+</header>
+
+<div class="sort-row" id="sortBar">
+  <button class="on" data-sort="">默认</button>
+  <button data-sort="amount-d">金额↓</button>
+  <button data-sort="amount-a">金额↑</button>
+  <button data-sort="weight-d">重量↓</button>
+  <button data-sort="weight-a">重量↑</button>
+  <button data-sort="price-d">单价↓</button>
+  <button data-sort="price-a">单价↑</button>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>品名规格</th>
+        <th>支数</th>
+        <th>重量/${weightUnit}</th>
+        <th>单价</th>
+        <th>销售金额</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<footer id="footerBar">
+  <div class="row"><span>笔数</span><span id="fCount">0</span></div>
+  <div class="row"><span>总重量</span><span id="fWeight">0 ${weightUnit}</span></div>
+  <div class="total"><span class="lb">销售总金额</span><span class="vl" id="fAmount">¥0</span></div>
+</footer>
+
+<script>
+var DATA = ${dataJson};
+var WUNIT = ${unitJson};
+var currentSort = '';
+
+function render(sortKey) {
+  var tbody = document.getElementById('tbody');
+  var data = DATA.slice();
+
+  if (sortKey) {
+    var p = sortKey.split('-'), field = p[0], dir = p[1];
+    data.sort(function(a,b){return dir==='d'?b[field]-a[field]:a[field]-b[field]});
+  }
+
+  var tw = 0, ta = 0, html = '';
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    tw += r.weight; ta += r.amount;
+    html += '<tr><td>' + esc(r.spec) + '</td><td>' + esc(r.count) + '</td><td>' + r.weight.toFixed(1) + '</td><td>¥' + r.price.toFixed(2) + '</td><td>¥' + r.amount.toFixed(2) + '</td></tr>';
+  }
+  if (!data.length) html = '<tr><td colspan="5" class="empty">暂无数据</td></tr>';
+  tbody.innerHTML = html;
+
+  document.getElementById('fCount').textContent = data.length + ' 笔';
+  document.getElementById('fWeight').textContent = tw.toFixed(1) + ' ' + WUNIT;
+  document.getElementById('fAmount').textContent = '¥' + ta.toFixed(2);
+}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+// 排序按钮
+var btns=document.querySelectorAll('#sortBar button');
+for(var i=0;i<btns.length;i++){!function(btn){
+  btn.addEventListener('click',function(){
+    var key=btn.getAttribute('data-sort');
+    for(var j=0;j<btns.length;j++)btns[j].classList.remove('on');
+    if(key===currentSort){currentSort='';btns[0].classList.add('on')}
+    else{currentSort=key;btn.classList.add('on')}
+    render(currentSort)
+  })
+}(btns[i])}
+
+// 竖屏提示
+var rh=document.getElementById('rotateHint');
+function checkOrient(){rh.style.display=window.innerHeight>window.innerWidth?'flex':'none'}
+checkOrient();window.addEventListener('resize',checkOrient);
+
+render('');
+</script>
+</body>
+</html>`;
+}
+
+// ============================================================
+//  下载
+// ============================================================
+function downloadHTML() {
+  if (!generatedHTML) { showToast('请先生成网页'); return; }
+  const title = document.getElementById('outputTitle').value || '销售明细';
+  const blob = new Blob([generatedHTML], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = title + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('✅ 下载成功');
+}
+
+// ============================================================
+//  Toast
+// ============================================================
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._hide);
+  t._hide = setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>
