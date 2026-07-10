@@ -278,13 +278,13 @@ body {
 
 <!-- ========== Step 1: 上传 ========== -->
 <div class="step-panel active" id="step1">
-  <div class="upload-area" id="uploadArea">
+  <label class="upload-area" id="uploadArea">
     <div class="icon">📂</div>
-    <div class="main-text">点击选择 Excel 文件</div>
-    <div class="sub-text">或拖拽 .xlsx / .xls 文件到此处</div>
+    <div class="main-text">点击此处选择 Excel 文件</div>
+    <div class="sub-text">电脑端也可拖拽 .xlsx / .xls 文件到此处</div>
     <div class="file-name" id="fileName"></div>
-  </div>
-  <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+  </label>
 
   <div style="background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.06)">
     <h3 style="font-size:15px;color:#1a3a5c;margin-bottom:8px">📌 使用说明</h3>
@@ -411,7 +411,7 @@ function goStep(n) {
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
 
-uploadArea.addEventListener('click', () => fileInput.click());
+// 移动端用 label 原生触发，桌面保留拖拽
 uploadArea.addEventListener('dragover', e => {
   e.preventDefault();
   uploadArea.classList.add('dragover');
